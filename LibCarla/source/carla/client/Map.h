@@ -13,6 +13,7 @@
 #include "carla/road/Map.h"
 #include "carla/road/RoadTypes.h"
 #include "carla/rpc/MapInfo.h"
+#include "Landmark.h"
 
 #include <string>
 
@@ -56,9 +57,9 @@ namespace client {
         uint32_t lane_type = static_cast<uint32_t>(road::Lane::LaneType::Driving)) const;
 
     SharedPtr<Waypoint> GetWaypointXODR(
-        carla::road::RoadId road_id,
-        carla::road::LaneId lane_id,
-        float s) const;
+      carla::road::RoadId road_id,
+      carla::road::LaneId lane_id,
+      float s) const;
 
     using TopologyList = std::vector<std::pair<SharedPtr<Waypoint>, SharedPtr<Waypoint>>>;
 
@@ -80,6 +81,18 @@ namespace client {
     /// junction
     std::vector<std::pair<SharedPtr<Waypoint>, SharedPtr<Waypoint>>> GetJunctionWaypoints(
         road::JuncId id, road::Lane::LaneType type) const;
+
+    /// Returns all the larndmarks in the map
+    std::vector<SharedPtr<Landmark>> GetAllLandmarks() const;
+
+    /// Returns all the larndmarks in the map with a specific OpenDRIVE id
+    std::vector<SharedPtr<Landmark>> GetLandmarksFromId(std::string id) const;
+
+    /// Returns all the landmarks in the map of a specific type
+    std::vector<SharedPtr<Landmark>> GetAllLandmarksOfType(std::string type) const;
+
+    /// Returns all the landmarks in the same group including this one
+    std::vector<SharedPtr<Landmark>> GetLandmarkGroup(const Landmark &landmark) const;
 
   private:
 

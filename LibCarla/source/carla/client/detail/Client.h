@@ -17,11 +17,14 @@
 #include "carla/rpc/CommandResponse.h"
 #include "carla/rpc/EpisodeInfo.h"
 #include "carla/rpc/EpisodeSettings.h"
+#include "carla/rpc/LightState.h"
 #include "carla/rpc/MapInfo.h"
 #include "carla/rpc/TrafficLightState.h"
 #include "carla/rpc/VehiclePhysicsControl.h"
 #include "carla/rpc/VehicleLightState.h"
 #include "carla/rpc/WeatherParameters.h"
+#include "carla/rpc/OpendriveGenerationParameters.h"
+#include "carla/rpc/VehicleLightStateList.h"
 
 #include <functional>
 #include <memory>
@@ -62,17 +65,32 @@ namespace detail {
 
     ~Client();
 
+    /// Querry to know if a Traffic Manager is running on port
+    bool IsTrafficManagerRunning(uint16_t port) const;
+
+    /// Gets a pair filled with the <IP, port> of the Trafic Manager running on port.
+    /// If there is no Traffic Manager running the pair will be ("", 0)
+    std::pair<std::string, uint16_t> GetTrafficManagerRunning(uint16_t port) const;
+
+    /// Informs the server that a Traffic Manager is running on <IP, port>
+    bool AddTrafficManagerRunning(std::pair<std::string, uint16_t> trafficManagerInfo) const;
+
+    void DestroyTrafficManager(uint16_t port) const;
+
     void SetTimeout(time_duration timeout);
 
     time_duration GetTimeout() const;
 
-    const std::string &GetEndpoint() const;
+    const std::string GetEndpoint() const;
 
     std::string GetClientVersion();
 
     std::string GetServerVersion();
 
     void LoadEpisode(std::string map_name);
+
+    void CopyOpenDriveToServer(
+        std::string opendrive, const rpc::OpendriveGenerationParameters & params);
 
     rpc::EpisodeInfo GetEpisodeInfo();
 
@@ -96,18 +114,16 @@ namespace detail {
 
     std::vector<rpc::Actor> GetActorsById(const std::vector<ActorId> &ids);
 
-    rpc::VehiclePhysicsControl GetVehiclePhysicsControl(
-        const rpc::ActorId &vehicle) const;
+    rpc::VehiclePhysicsControl GetVehiclePhysicsControl(rpc::ActorId vehicle) const;
 
-    rpc::VehicleLightState GetVehicleLightState(
-        const rpc::ActorId &vehicle) const;
+    rpc::VehicleLightState GetVehicleLightState(rpc::ActorId vehicle) const;
 
     void ApplyPhysicsControlToVehicle(
-        const rpc::ActorId &vehicle,
+        rpc::ActorId vehicle,
         const rpc::VehiclePhysicsControl &physics_control);
 
     void SetLightStateToVehicle(
-        const rpc::ActorId &vehicle,
+        rpc::ActorId vehicle,
         const rpc::VehicleLightState &light_state);
 
     rpc::Actor SpawnActor(
@@ -139,6 +155,10 @@ namespace detail {
         const geom::Vector3D &vector);
 
     void AddActorImpulse(
+        rpc::ActorId actor,
+        const geom::Vector3D &vector);
+
+    void AddActorAngularImpulse(
         rpc::ActorId actor,
         const geom::Vector3D &vector);
 
@@ -182,10 +202,19 @@ namespace detail {
         rpc::ActorId traffic_light,
         bool freeze);
 
-    std::vector<ActorId> GetGroupTrafficLights(
-        const rpc::ActorId &traffic_light);
+    void ResetTrafficLightGroup(
+        rpc::ActorId traffic_light);
 
-    std::string StartRecorder(std::string name);
+    void FreezeAllTrafficLights(bool frozen);
+
+    /// Returns a list of pairs where the firts element is the vehicle ID
+    /// and the second one is the light state
+    rpc::VehicleLightStateList GetVehiclesLightStates();
+
+    std::vector<ActorId> GetGroupTrafficLights(
+        rpc::ActorId traffic_light);
+
+    std::string StartRecorder(std::string name, bool additional_data);
 
     void StopRecorder();
 
@@ -198,6 +227,10 @@ namespace detail {
     std::string ReplayFile(std::string name, double start, double duration, uint32_t follow_id);
 
     void SetReplayerTimeFactor(double time_factor);
+
+    void SetReplayerIgnoreHero(bool ignore_hero);
+
+    void StopReplayer(bool keep_actors);
 
     void SubscribeToStream(
         const streaming::Token &token,
@@ -216,6 +249,12 @@ namespace detail {
         bool do_tick_cue);
 
     uint64_t SendTickCue();
+
+    std::vector<rpc::LightState> QueryLightsStateToServer() const;
+
+    void UpdateServerLightsState(
+        std::vector<rpc::LightState>& lights,
+        bool discard_client = false) const;
 
   private:
 

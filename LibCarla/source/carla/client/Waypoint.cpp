@@ -8,6 +8,9 @@
 
 #include "carla/client/Map.h"
 #include "carla/client/Junction.h"
+#include "carla/client/Landmark.h"
+
+#include <unordered_set>
 
 namespace carla {
 namespace client {
@@ -84,7 +87,11 @@ namespace client {
       remaining_length = current_s;
     }
     remaining_length -= std::numeric_limits<double>::epsilon();
-    result.emplace_back(result.back()->GetNext(remaining_length).front());
+    if(result.size()) {
+      result.emplace_back(result.back()->GetNext(remaining_length).front());
+    } else {
+      result.emplace_back(GetNext(remaining_length).front());
+    }
 
     return result;
   }
@@ -111,7 +118,11 @@ namespace client {
       remaining_length = current_s;
     }
     remaining_length -= std::numeric_limits<double>::epsilon();
-    result.emplace_back(result.back()->GetPrevious(remaining_length).front());
+    if(result.size()) {
+      result.emplace_back(result.back()->GetPrevious(remaining_length).front());
+    } else {
+      result.emplace_back(GetPrevious(remaining_length).front());
+    }
 
     return result;
   }
@@ -142,7 +153,7 @@ namespace client {
   }
 
   boost::optional<road::element::LaneMarking> Waypoint::GetLeftLaneMarking() const {
-    if (_mark_record.first != nullptr) {
+    if (_mark_record.second != nullptr) {
       return road::element::LaneMarking(*_mark_record.second);
     }
     return boost::optional<road::element::LaneMarking>{};
@@ -202,6 +213,43 @@ namespace client {
     }
 
     return (c_right & lane_change_type::Right) | (c_left & lane_change_type::Left);
+  }
+
+  std::vector<SharedPtr<Landmark>> Waypoint::GetAllLandmarksInDistance(
+      double distance, bool stop_at_junction) const {
+    std::vector<SharedPtr<Landmark>> result;
+    auto signals = _parent->GetMap().GetSignalsInDistance(
+        _waypoint, distance, stop_at_junction);
+    std::unordered_set<const road::element::RoadInfoSignal*> added_signals; // check for repeated signals
+    for(auto &signal_data : signals){
+      if(added_signals.count(signal_data.signal) > 0) {
+        continue;
+      }
+      added_signals.insert(signal_data.signal);
+      auto waypoint = SharedPtr<Waypoint>(new Waypoint(_parent, signal_data.waypoint));
+      result.emplace_back(
+          new Landmark(waypoint, _parent, signal_data.signal, signal_data.accumulated_s));
+    }
+    return result;
+  }
+
+  std::vector<SharedPtr<Landmark>> Waypoint::GetLandmarksOfTypeInDistance(
+        double distance, std::string filter_type, bool stop_at_junction) const {
+    std::vector<SharedPtr<Landmark>> result;
+    std::unordered_set<const road::element::RoadInfoSignal*> added_signals; // check for repeated signals
+    auto signals = _parent->GetMap().GetSignalsInDistance(
+        _waypoint, distance, stop_at_junction);
+    for(auto &signal_data : signals){
+      if(signal_data.signal->GetSignal()->GetType() == filter_type) {
+        if(added_signals.count(signal_data.signal) > 0) {
+          continue;
+        }
+        auto waypoint = SharedPtr<Waypoint>(new Waypoint(_parent, signal_data.waypoint));
+        result.emplace_back(
+            new Landmark(waypoint, _parent, signal_data.signal, signal_data.accumulated_s));
+      }
+    }
+    return result;
   }
 
 } // namespace client

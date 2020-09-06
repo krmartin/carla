@@ -22,9 +22,11 @@
 #include "carla/client/detail/WalkerNavigation.h"
 #include "carla/profiler/LifetimeProfiled.h"
 #include "carla/rpc/TrafficLightState.h"
+#include "carla/rpc/VehicleLightStateList.h"
+
+#include <boost/optional.hpp>
 
 #include <memory>
-#include <optional>
 
 namespace carla {
 namespace client {
@@ -66,6 +68,10 @@ namespace detail {
     }
 
     EpisodeProxy LoadEpisode(std::string map_name);
+
+    EpisodeProxy LoadOpenDriveEpisode(
+        std::string opendrive,
+        const rpc::OpendriveGenerationParameters & params);
 
     /// @}
     // =========================================================================
@@ -124,6 +130,10 @@ namespace detail {
       _client.SetTimeout(timeout);
     }
 
+    time_duration GetNetworkingTimeout() {
+      return _client.GetTimeout();
+    }
+
     std::string GetClientVersion() {
       return _client.GetClientVersion();
     }
@@ -150,7 +160,7 @@ namespace detail {
       _episode->RemoveOnTickEvent(id);
     }
 
-    uint64_t Tick();
+    uint64_t Tick(time_duration timeout);
 
     /// @}
     // =========================================================================
@@ -158,7 +168,39 @@ namespace detail {
     // =========================================================================
     /// @{
 
+    std :: string GetEndpoint() {
+    	return _client.GetEndpoint();
+    }
+
+    /// Query to know if a Traffic Manager is running on port
+    bool IsTrafficManagerRunning(uint16_t port) const {
+      return _client.IsTrafficManagerRunning(port);
+    }
+
+    /// Gets a pair filled with the <IP, port> of the Trafic Manager running on port.
+    /// If there is no Traffic Manager running the pair will be ("", 0)
+    std::pair<std::string, uint16_t> GetTrafficManagerRunning(uint16_t port) const {
+      return _client.GetTrafficManagerRunning(port);
+    }
+
+    /// Informs that a Traffic Manager is running on <IP, port>
+    bool AddTrafficManagerRunning(std::pair<std::string, uint16_t> trafficManagerInfo) const {
+      return _client.AddTrafficManagerRunning(trafficManagerInfo);
+    }
+
+    void DestroyTrafficManager(uint16_t port) const {
+      _client.DestroyTrafficManager(port);
+    }
+
+    void AddPendingException(std::string e) {
+      _episode->AddPendingException(e);
+    }
+
     SharedPtr<BlueprintLibrary> GetBlueprintLibrary();
+
+    /// Returns a list of pairs where the firts element is the vehicle ID
+    /// and the second one is the light state
+    rpc::VehicleLightStateList GetVehiclesLightStates();
 
     SharedPtr<Actor> GetSpectator();
 
@@ -288,6 +330,10 @@ namespace detail {
       _client.AddActorImpulse(actor.GetId(), vector);
     }
 
+    void AddActorAngularImpulse(const Actor &actor, const geom::Vector3D &vector) {
+      _client.AddActorAngularImpulse(actor.GetId(), vector);
+    }
+
     geom::Vector3D GetActorAcceleration(const Actor &actor) const {
       return GetActorSnapshot(actor).acceleration;
     }
@@ -344,8 +390,8 @@ namespace detail {
     // =========================================================================
     /// @{
 
-    std::string StartRecorder(std::string name) {
-      return _client.StartRecorder(std::move(name));
+    std::string StartRecorder(std::string name, bool additional_data) {
+      return _client.StartRecorder(std::move(name), additional_data);
     }
 
     void StopRecorder(void) {
@@ -371,6 +417,14 @@ namespace detail {
     void SetReplayerTimeFactor(double time_factor) {
       _client.SetReplayerTimeFactor(time_factor);
     }
+
+    void SetReplayerIgnoreHero(bool ignore_hero) {
+      _client.SetReplayerIgnoreHero(ignore_hero);
+    }
+
+    void StopReplayer(bool keep_actors) {
+      _client.StopReplayer(keep_actors);
+  }
 
     /// @}
     // =========================================================================
@@ -410,6 +464,10 @@ namespace detail {
       _client.FreezeTrafficLight(trafficLight.GetId(), freeze);
     }
 
+    void ResetTrafficLightGroup(TrafficLight &trafficLight) {
+      _client.ResetTrafficLightGroup(trafficLight.GetId());
+    }
+
     std::vector<ActorId> GetGroupTrafficLights(TrafficLight &trafficLight) {
       return _client.GetGroupTrafficLights(trafficLight.GetId());
     }
@@ -439,10 +497,44 @@ namespace detail {
     }
 
     /// @}
+    // =========================================================================
+    /// @name Operations lights
+    // =========================================================================
+    /// @{
+
+    SharedPtr<LightManager> GetLightManager() const {
+      return _light_manager;
+    }
+
+    std::vector<rpc::LightState> QueryLightsStateToServer() const {
+      return _client.QueryLightsStateToServer();
+    }
+
+    void UpdateServerLightsState(
+        std::vector<rpc::LightState>& lights,
+        bool discard_client = false) const {
+      _client.UpdateServerLightsState(lights, discard_client);
+    }
+
+    size_t RegisterLightUpdateChangeEvent(std::function<void(WorldSnapshot)> callback) {
+      DEBUG_ASSERT(_episode != nullptr);
+      return _episode->RegisterLightUpdateChangeEvent(std::move(callback));
+    }
+
+    void RemoveLightUpdateChangeEvent(size_t id) {
+      DEBUG_ASSERT(_episode != nullptr);
+      _episode->RemoveLightUpdateChangeEvent(id);
+    }
+
+    void FreezeAllTrafficLights(bool frozen);
+
+    /// @}
 
   private:
 
     Client _client;
+
+    SharedPtr<LightManager> _light_manager;
 
     std::shared_ptr<Episode> _episode;
 
