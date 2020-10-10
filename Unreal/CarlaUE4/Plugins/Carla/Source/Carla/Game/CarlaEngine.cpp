@@ -10,6 +10,7 @@
 #include "Carla/Game/CarlaEpisode.h"
 #include "Carla/Game/CarlaStaticDelegates.h"
 #include "Carla/Lights/CarlaLightSubsystem.h"
+#include "Carla/Recorder/CarlaRecorder.h"
 #include "Carla/Settings/CarlaSettings.h"
 #include "Carla/Settings/EpisodeSettings.h"
 
@@ -82,6 +83,15 @@ void FCarlaEngine::NotifyBeginEpisode(UCarlaEpisode &Episode)
 {
   Episode.EpisodeSettings.FixedDeltaSeconds = FCarlaEngine_GetFixedDeltaSeconds();
   CurrentEpisode = &Episode;
+
+  // make connection between Episode and Recorder
+  if (Recorder)
+  {
+    Recorder->SetEpisode(&Episode);
+    Episode.SetRecorder(Recorder);
+    Recorder->GetReplayer()->CheckPlayAfterMapLoaded();
+  }
+
   Server.NotifyBeginEpisode(Episode);
 }
 
@@ -117,10 +127,10 @@ void FCarlaEngine::OnPostTick(UWorld *, ELevelTick, float DeltaSeconds)
 {
   if (GetCurrentEpisode())
   {
-    auto* Recorder = GetCurrentEpisode()->GetRecorder();
-    if (Recorder)
+    auto* EpisodeRecorder = GetCurrentEpisode()->GetRecorder();
+    if (EpisodeRecorder)
     {
-      Recorder->Ticking(DeltaSeconds);
+      EpisodeRecorder->Ticking(DeltaSeconds);
     }
   }
   do
