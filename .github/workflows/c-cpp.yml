@@ -17,6 +17,8 @@ jobs:
       run: ./Update.sh
     - name: configure
       run: ./configure
+    - name: pythonapi
+      run: make PythonAPI
     - name: make
       run: make
     - name: make check
